@@ -1,49 +1,36 @@
 package types
 
 import (
-	"context"
 	"fmt"
-	"github.com/Vitokz/lil_script/db"
+	"github.com/Vitokz/lil_script/worker/x"
 	"github.com/Vitokz/lil_script/worker/x/staking"
-	sdkTypes "github.com/cosmos/cosmos-sdk/types"
-	web3 "github.com/ethereum/go-ethereum/ethclient"
-	"github.com/tendermint/tendermint/libs/log"
 )
-
-// Module is interfaces for modules to be accepted by the manager
-type Module interface {
-	GetHandler() HandlerI
-	Msgs() []string
-	GetName() string
-}
-
-type HandlerI func(ctx context.Context, web3 *web3.Client, db *db.DB, logger log.Logger, msg sdkTypes.Msg) error
 
 // Module Manager ----------------------------------------------------------------------------------------
 
 type ModuleManager struct {
-	Modules []Module
+	Modules []x.Module
 
-	moduleHandlers map[string]HandlerI // map [' module name '] = this handler
-	msgsHandlers   map[string]HandlerI // map[ ' msg type ' ] = this handler
+	moduleHandlers map[string]x.HandlerI // map [' module name '] = this handler
+	msgsHandlers   map[string]x.HandlerI // map[ ' msg type ' ] = this handler
 }
 
 func NewModuleManager() ModuleManager {
 	var mm ModuleManager
 
-	mm.Modules = []Module{
+	mm.Modules = []x.Module{
 		staking.NewStaking(),
 	}
 
-	mm.msgsHandlers = make(map[string]HandlerI)
-	mm.moduleHandlers = make(map[string]HandlerI)
+	mm.msgsHandlers = make(map[string]x.HandlerI)
+	mm.moduleHandlers = make(map[string]x.HandlerI)
 
 	mm.setMsgsAndThemHandlers()
 	return mm
 }
 
 // GetMsgHandler searches for the required handler for the given message type
-func (m *ModuleManager) GetMsgHandler(msg string) (HandlerI, error) {
+func (m *ModuleManager) GetMsgHandler(msg string) (x.HandlerI, error) {
 	handler, ok := m.msgsHandlers[msg]
 	if ok {
 		return handler, nil

@@ -2,11 +2,9 @@ package staking
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"github.com/Vitokz/lil_script/db"
 	dbTypes "github.com/Vitokz/lil_script/db/types"
-	"github.com/Vitokz/lil_script/worker/types"
 	"github.com/Vitokz/lil_script/worker/x"
 	sdkTypes "github.com/cosmos/cosmos-sdk/types"
 	stakingTypes "github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -30,13 +28,13 @@ var (
 type Staking struct {
 }
 
-func NewStaking() types.Module {
+func NewStaking() x.Module {
 	staking := Staking{}
 
 	return &staking
 }
 
-func (s *Staking) GetHandler() types.HandlerI {
+func (s *Staking) GetHandler() x.HandlerI {
 	return s.getHandler()
 }
 
@@ -56,7 +54,7 @@ func (s *Staking) GetName() string {
 
 // handlers ------------------------------------------------
 
-func (s *Staking) getHandler() types.HandlerI {
+func (s *Staking) getHandler() x.HandlerI {
 	return func(ctx context.Context, web3 *web3.Client, db *db.DB, logger log.Logger, msg sdkTypes.Msg) error {
 		switch msg := msg.(type) {
 		case *stakingTypes.MsgCreateValidator:
@@ -76,6 +74,8 @@ func (s *Staking) getHandler() types.HandlerI {
 }
 
 func (s *Staking) msgDelegate(ctx context.Context, web3 *web3.Client, db *db.DB, logger log.Logger, msg *stakingTypes.MsgDelegate) error {
+	logger.Info(fmt.Sprintf("start handle delegate tx: valAddr(%s) delAddr(%s)", msg.ValidatorAddress, msg.DelegatorAddress))
+
 	delAddr := msg.DelegatorAddress
 	delAccAddr, err := sdkTypes.AccAddressFromBech32(msg.DelegatorAddress)
 	if err != nil {
@@ -94,23 +94,37 @@ func (s *Staking) msgDelegate(ctx context.Context, web3 *web3.Client, db *db.DB,
 		return err
 	}
 
+	balanceStr := balance.String()
+
 	coinBalance := dbTypes.AddressCoinBalances{
 		AddressHash: delAccAddr.Bytes(),
-		BlockNumber: height.(int),
-		Value:       float64(sdkTypes.NewIntFromBigInt(balance).Uint64()),
+		BlockNumber: int(height.(int64)),
 	}
+	//var existAddr int
+	//query := `SELECT count(*) FROM addresses a WHERE a.hash = $1`
+	//
+	//err = db.DB.GetContext(ctx, &existAddr,
+	//	query, coinBalance.AddressHash,
+	//)
+	//if err != nil {
+	//	logger.Debug(fmt.Sprintf("failed to get address data with addr: %s", delAccAddrHex))
+	//	return err
+	//}
+	//
+	//if existAddr == 0 {
+	//
+	//}
 
 	//  insert user balance
 	query := `INSERT INTO address_coin_balances
 			  (address_hash, block_number, value, value_fetched_at, inserted_at, updated_at)
-			  VALUES($1, $2, $3, NULL, $4, $5);
+			  VALUES($1, $2, cast($3 AS NUMERIC), NULL, $4, $5) ON conflict DO NOTHING;
 	`
-	err = db.DB.GetContext(ctx, balance,
-		query, coinBalance.AddressHash, coinBalance.BlockNumber, coinBalance.Value,
+	_, err = db.DB.ExecContext(ctx, query,
+		coinBalance.AddressHash, coinBalance.BlockNumber, balanceStr,
 		time.Now(), time.Now(),
 	)
-
-	if err == sql.ErrNoRows {
+	if err != nil {
 		logger.Debug(fmt.Sprintf("failed to insert address_coin_balance in msgDelegate: %s", delAddr))
 		return err
 	}

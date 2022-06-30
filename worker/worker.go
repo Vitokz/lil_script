@@ -11,9 +11,12 @@ import (
 	sdkTypes "github.com/cosmos/cosmos-sdk/types"
 	web3 "github.com/ethereum/go-ethereum/ethclient"
 	"github.com/tendermint/tendermint/libs/log"
-	"github.com/tendermint/tendermint/libs/sync"
+	tmSync "github.com/tendermint/tendermint/libs/sync"
 	coretypes "github.com/tendermint/tendermint/rpc/core/types"
+	"sync"
 	"time"
+
+	//"time"
 
 	tmjson "github.com/tendermint/tendermint/libs/json"
 	tmtypes "github.com/tendermint/tendermint/types"
@@ -22,10 +25,8 @@ import (
 	//"time"
 )
 
-type event string
-
-const (
-	TxEvent event = tmtypes.EventTx
+var (
+	TxEvent = tmtypes.QueryForEvent(tmtypes.EventTx).String()
 	//newTxSub event = "new_tx_subscriber"
 )
 
@@ -37,15 +38,15 @@ type Worker struct {
 	Web3   *web3.Client
 	mm     types.ModuleManager
 	db     *db.DB
+	wg     sync.WaitGroup
 
 	topicChans map[string]chan coretypes.ResultEvent
-	mux        *sync.RWMutex
+	mux        *tmSync.RWMutex
 
-	eventsSubs []event
+	eventsSubs []string
 }
 
 func NewWorker(cfg config.ConfigI, cdc *params.EncodingConfig, logger log.Logger) (*Worker, error) {
-
 	web3Client, err := web3.Dial(cfg.GetEthereumJsonRPC())
 	if err != nil {
 		return nil, err
@@ -73,30 +74,35 @@ func NewWorker(cfg config.ConfigI, cdc *params.EncodingConfig, logger log.Logger
 		Rpc:    rpcCLient,
 		mm:     mm,
 		db:     db,
+		wg:     sync.WaitGroup{},
 
 		topicChans: topicChans,
-		mux:        new(sync.RWMutex),
+		mux:        new(tmSync.RWMutex),
 
-		eventsSubs: make([]event, 0),
+		eventsSubs: make([]string, 0),
 	}, nil
 }
 
-func (w *Worker) StartWorker(events ...event) {
+func (w *Worker) StartWorker(events ...string) {
 	//re, error := w.Rpc.TmRpc.Subscribe(w.ctx, newTxSub, tmtypes.EventTx)
-	for _, v := range events {
-		event := string(v)
+	for _, event := range events {
 		err := w.Rpc.TmWsClient.Subscribe(w.ctx, event)
 		if err != nil {
 			panic(err.Error())
 		}
 
+		w.logger.Info(fmt.Sprintf("Subscribe to event: %s", event))
+
 		ch := make(chan coretypes.ResultEvent)
 		w.topicChans[event] = ch
 	}
-
+	w.wg.Add(1)
+	go w.consumeEvents()
+	w.wg.Add(1)
 	go w.startReadNewTxEvents()
 
 	w.eventsSubs = events
+	w.wg.Wait()
 }
 
 func (w *Worker) startReadNewTxEvents() {
@@ -104,7 +110,9 @@ func (w *Worker) startReadNewTxEvents() {
 	if !ok {
 		return
 	}
+	defer w.wg.Done()
 
+	w.logger.Info(fmt.Sprintf("start worker for event: %s", TxEvent))
 	for {
 		select {
 		case event, ok := <-ch:
@@ -117,6 +125,8 @@ func (w *Worker) startReadNewTxEvents() {
 				w.logger.Debug("event data type mismatch", "type", fmt.Sprintf("%T", event.Data))
 				continue
 			}
+
+			w.logger.Info(fmt.Sprintf("consume event with type %s and height %d", event.Query, dataTx.Height))
 
 			tx, err := w.cdc.TxConfig.TxDecoder()(dataTx.Tx)
 			if err != nil {
@@ -146,6 +156,7 @@ func (w *Worker) startReadNewTxEvents() {
 }
 
 func (w *Worker) consumeEvents() {
+	defer w.wg.Done()
 	for {
 		for rpcResp := range w.Rpc.TmWsClient.ResponsesCh {
 			var ev coretypes.ResultEvent
