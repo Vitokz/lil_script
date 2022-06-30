@@ -136,7 +136,7 @@ func (w *Worker) startReadNewTxEvents() {
 				}
 				err = handler(context.WithValue(context.Background(), "height", dataTx.Height), w.Web3, w.db, w.logger, msg)
 				if err != nil {
-					w.logger.Error(fmt.Sprintf("failed to handle transaction")) //TODO: make retry
+					w.logger.Error(fmt.Sprintf("failed to handle transaction %s", err.Error())) //TODO: make retry
 				}
 			}
 		default:
