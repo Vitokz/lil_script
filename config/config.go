@@ -35,7 +35,7 @@ type Config struct {
 	TendermintWebsocket string `mapstructure:"TENDERMINT_WEBSOCKET"`
 	EthereumJsonRPC     string `mapstructure:"ETHEREUM_JSON_RPC"`
 	EthereumWebsocket   string `mapstructure:"ETHEREUM_WEBSOCKET"`
-	GrpcAddress         string `mapstructure:"INDEXER_GRPC_ADDRESS"`
+	GrpcAddress         string `mapstructure:"ETHEREUM_GRPC_ADDRESS"`
 	CosmosRestAddress   string `mapstructure:"COSMOS_REST_ADDRESS"`
 	ScoutPgDsn          string `mapstructure:"SCOUT_PG_DSN"`
 }
@@ -50,12 +50,12 @@ func ParseConfigInConfigFile() ConfigI {
 
 	viper.AutomaticEnv()
 
-	err := viper.ReadInConfig()
-	if err != nil {
-		log.Fatalf(err.Error())
-	}
+	//err := viper.ReadInConfig()
+	//if err != nil {
+	//	log.Fatalf(err.Error())
+	//}
 
-	err = viper.Unmarshal(&cfg)
+	err := viper.Unmarshal(&cfg)
 	if err != nil {
 		log.Fatalf(err.Error())
 	}
@@ -80,10 +80,10 @@ func ParseConfigInOsEnv() ConfigI {
 
 func setDefaults(v *viper.Viper) {
 	v.SetDefault("TENDERMINT_RPC", "http://127.0.0.1:26657")
-	v.SetDefault("TENDERMINT_WEBSOCKET", "http://127.0.0.1:26657/websocket")
+	v.SetDefault("TENDERMINT_WEBSOCKET", "http://127.0.0.1:26657")
 	v.SetDefault("ETHEREUM_JSON_RPC", "http://127.0.0.1:8545")
 	v.SetDefault("ETHEREUM_WEBSOCKET", "http://127.0.0.1:8545")
-	v.SetDefault("INDEXER_GRPC_ADDRESS", "127.0.0.1:9000")
+	v.SetDefault("ETHEREUM_GRPC_ADDRESS", "127.0.0.1:9000")
 	v.SetDefault("COSMOS_REST_ADDRESS", "127.0.0.1:1317")
 	v.SetDefault("SCOUT_PG_DSN", "host=127.0.0.1 port=5432 user=indexer_test password=uwg2HboLgIoCnCPf dbname=indexer_test sslmode=disable")
 }
