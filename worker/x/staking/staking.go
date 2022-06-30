@@ -125,7 +125,7 @@ func (s *Staking) msgDelegate(ctx context.Context, web3 *web3.Client, db *db.DB,
 		time.Now(), time.Now(),
 	)
 	if err != nil {
-		logger.Debug(fmt.Sprintf("failed to insert address_coin_balance in msgDelegate: %s", delAddr))
+		logger.Error(fmt.Sprintf("failed to insert address_coin_balance in msgDelegate: %s", delAddr))
 		return err
 	}
 
