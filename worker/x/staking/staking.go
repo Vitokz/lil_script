@@ -100,23 +100,41 @@ func (s *Staking) msgDelegate(ctx context.Context, web3 *web3.Client, db *db.DB,
 		AddressHash: delAccAddr.Bytes(),
 		BlockNumber: int(height.(int64)),
 	}
-	//var existAddr int
-	//query := `SELECT count(*) FROM addresses a WHERE a.hash = $1`
-	//
-	//err = db.DB.GetContext(ctx, &existAddr,
-	//	query, coinBalance.AddressHash,
-	//)
-	//if err != nil {
-	//	logger.Debug(fmt.Sprintf("failed to get address data with addr: %s", delAccAddrHex))
-	//	return err
-	//}
-	//
-	//if existAddr == 0 {
-	//
-	//}
+	var existAddr int
+	query := `SELECT count(*) FROM addresses a WHERE a.hash = $1`
+
+	err = db.DB.GetContext(ctx, &existAddr,
+		query, coinBalance.AddressHash,
+	)
+	if err != nil {
+		logger.Error(fmt.Sprintf("failed to get address data with addr: %s", delAccAddrHex))
+		return err
+	}
+
+	if existAddr == 0 {
+		nonce, err := web3.NonceAt(ctx, common.HexToAddress(delAccAddrHex), big.NewInt(int64(coinBalance.BlockNumber)))
+		if err != nil {
+			return err
+		}
+
+		query = `INSERT INTO addresses
+				  (fetched_coin_balance, fetched_coin_balance_block_number, hash, contract_code, inserted_at, updated_at, nonce,
+				   decompiled, verified, gas_used, transactions_count, token_transfers_count)
+			      VALUES(cast($1 AS NUMERIC), $2, $3, NUll, $4, $5, $6,
+			             false, false, NULL, NULL, NULL);
+	`
+		_, err = db.DB.ExecContext(ctx, query,
+			balanceStr, coinBalance.BlockNumber, coinBalance.AddressHash, time.Now(), time.Now(), nonce,
+		)
+		if err != nil {
+			logger.Error(fmt.Sprintf("failed to insert new address in db: %s", delAccAddrHex))
+			return err
+		}
+		logger.Info(fmt.Sprintf("Add new addr in database: %s", delAccAddrHex))
+	}
 
 	//  insert user balance
-	query := `INSERT INTO address_coin_balances
+	query = `INSERT INTO address_coin_balances
 			  (address_hash, block_number, value, value_fetched_at, inserted_at, updated_at)
 			  VALUES($1, $2, cast($3 AS NUMERIC), NULL, $4, $5) ON conflict DO NOTHING;
 	`
